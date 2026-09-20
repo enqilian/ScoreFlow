@@ -248,7 +248,6 @@ grayLookAndFeel()
     };
     // 添加保存标记按钮
     addAndMakeVisible(saveMarkersButton);
-    // 使用 juce::CharPointer_UTF8 包装 UTF-8 字符串
     saveMarkersButton.setButtonText("SaveMarkers");
     saveMarkersButton.onClick = [this]()
     {
@@ -257,7 +256,7 @@ grayLookAndFeel()
         auto fileChooserFlags = juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles;
 
         fileChooser = std::make_unique<juce::FileChooser>(
-            juce::String(juce::CharPointer_UTF8("保存标记位置")),
+            "Save Marker Positions",
             juce::File::getSpecialLocation(juce::File::userDesktopDirectory),
             "*.markers");
 
