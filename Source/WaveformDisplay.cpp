@@ -25,17 +25,17 @@ WaveformDisplay::~WaveformDisplay()
 
 void WaveformDisplay::paint(juce::Graphics& g)//如果 audioThumbnail 有有效的音频数据，则绘制波形；否则，显示提示文字。
 {
-    //背景颜色
-    g.fillAll(juce::Colours::white);
+    //背景颜色（跟深色主题统一）
+    g.fillAll(juce::Colour(0xff263238));
 
     if (audioThumbnail.getTotalLength() > 0.0)
     {
         //绘制波形
-        g.setColour(juce::Colours::blue);
+        g.setColour(juce::Colours::white.withAlpha(0.7f));
         audioThumbnail.drawChannels(g, getLocalBounds(), 0.0, audioThumbnail.getTotalLength(), 1.0f);
 
         // 绘制播放位置线
-        g.setColour(juce::Colours::red);
+        g.setColour(juce::Colours::pink);
         auto audioPosition = currentPosition / audioThumbnail.getTotalLength();
         int x = static_cast<int>(audioPosition * getWidth());
         g.drawLine(x, 0, x, getHeight(), 2.0f);
@@ -43,12 +43,12 @@ void WaveformDisplay::paint(juce::Graphics& g)//如果 audioThumbnail 有有效�
     else
     {
         //如果没有音频，显示文字
-        g.setColour(juce::Colours::darkgrey);
+        g.setColour(juce::Colours::white.withAlpha(0.4f));
         g.drawText("No Audio Loaded", getLocalBounds(), juce::Justification::centred, true);
     }
-    // 绘制边框（可选，根据需要调整颜色和线宽）
-    g.setColour(juce::Colours::pink);
-    g.drawRect(getLocalBounds(),3);
+    // 绘制边框（克制的细描边）
+    g.setColour(juce::Colours::white.withAlpha(0.15f));
+    g.drawRect(getLocalBounds(), 1);
 }
 
 void WaveformDisplay::changeListenerCallback(juce::ChangeBroadcaster* source)//当 audioThumbnail 发生变化（例如加载了新的音频数据）时，调用此回调函数。检查通知源是否为 audioThumbnail，如果是，则调用 repaint()，请求组件重绘，以更新显示。

@@ -28,6 +28,12 @@ grayLookAndFeel()
     // 注册音频格式管理器
     formatManager.registerBasicFormats();
 
+    // 应用名称标签
+    appTitleLabel.setText("ScoreFlow", juce::dontSendNotification);
+    appTitleLabel.setFont(juce::Font(juce::FontOptions(20.0f, juce::Font::bold)));
+    appTitleLabel.setColour(juce::Label::textColourId, juce::Colours::pink);
+    addAndMakeVisible(appTitleLabel);
+
     // 添加控件
     addAndMakeVisible(waveformDisplay);
     addAndMakeVisible(progressSlider);
@@ -43,6 +49,7 @@ grayLookAndFeel()
     addAndMakeVisible(audioLengthLabel);
     // 添加和配置新的 markerSlider
     addAndMakeVisible(markerSlider);
+    addAndMakeVisible(presentButton);
 
     // 设置组件可见
     audioFileNameLabel.setVisible(false);
@@ -113,6 +120,7 @@ grayLookAndFeel()
             beforeButton.setEnabled(currentPageIndex > 0);
             nextButton.setEnabled(currentPageIndex + 1 < totalNumPages);
 
+            updatePresentationImage();
             repaint();
         }
     };
@@ -165,9 +173,13 @@ grayLookAndFeel()
                 beforeButton.setEnabled(currentPageIndex > 0);
                 nextButton.setEnabled(currentPageIndex + 1 < totalNumPages);
 
+                updatePresentationImage();
                 repaint();
             }
         };
+
+    // 独立放大窗口的开关按钮
+    presentButton.onClick = [this] { togglePresentationWindow(); };
 
     // 设置定时器，用于更新播放进度
     startTimer(500);  // 每半秒更新一次进度条
@@ -183,11 +195,11 @@ grayLookAndFeel()
     progressSlider.setColour(juce::Slider::trackColourId, juce::Colours::grey);
     progressSlider.setColour(juce::Slider::backgroundColourId, juce::Colours::transparentBlack);
     //pdf名称的颜色
-    pdfFileNameLabel.setColour(juce::Label::textColourId, juce::Colours::black);
-    audioFileNameLabel.setColour(juce::Label::textColourId, juce::Colours::black);
+    pdfFileNameLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.6f));
+    audioFileNameLabel.setColour(juce::Label::textColourId, juce::Colours::white.withAlpha(0.6f));
     //设置slider旁边秒数的颜色
-    audioPositionLabel.setColour(juce::Label::textColourId, juce::Colours::black);
-    audioLengthLabel.setColour(juce::Label::textColourId, juce::Colours::black);
+    audioPositionLabel.setColour(juce::Label::textColourId, juce::Colours::white);
+    audioLengthLabel.setColour(juce::Label::textColourId, juce::Colours::white);
 
     // 设置按钮初始状态
     beforeButton.setEnabled(false);
@@ -688,12 +700,20 @@ void MainComponent::loadAndDisplayPDF(const juce::File& pdfFile)
     // 清空缓存
     renderedPageCache.clear();
 
+    updatePresentationImage();
 }
 
 void MainComponent::renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageComponent& component, int pageIndex)
 {
-    // 检查缓存中是否已有该页面的图像
-    auto it = renderedPageCache.find(pageIndex);
+    // 按屏幕的实际物理分辨率（Retina 等高分屏通常是 2 倍）渲染，避免显示时被放大而模糊
+    float scale = juce::Component::getApproximateScaleFactorForComponent(&component);
+    int renderWidth = juce::roundToInt(component.getWidth() * scale);
+    int renderHeight = juce::roundToInt(component.getHeight() * scale);
+
+    // 缓存 key 必须带上渲染尺寸：同一页可能先在小预览框渲染过，
+    // 如果只按页码缓存，翻页后大图框会直接拿到那张小图，导致糊
+    auto cacheKey = std::make_tuple(pageIndex, renderWidth, renderHeight);
+    auto it = renderedPageCache.find(cacheKey);
     if (it != renderedPageCache.end())
     {
         // 使用缓存的图像
@@ -701,10 +721,19 @@ void MainComponent::renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageCo
         return;
     }
 
-    // 获取组件的尺寸
-    const int targetWidth = component.getWidth();
-    const int targetHeight = component.getHeight();
+    juce::Image juceImage = renderPdfPageToImage(pdfPage, renderWidth, renderHeight);
 
+    // 在组件中显示图像，不进行缩放
+    component.setImage(juceImage);
+
+    // 将图像存入缓存
+    renderedPageCache[cacheKey] = juceImage;
+}
+
+// 将 PDF 页面渲染为一张 JUCE 图像，按给定的目标尺寸保持 PDF 本身的宽高比进行缩放。
+// 不经过 renderedPageCache，供需要独立尺寸渲染的调用方（如放大展示窗口）使用。
+juce::Image MainComponent::renderPdfPageToImage(PopplerPage* pdfPage, int targetWidth, int targetHeight)
+{
     // 获取 PDF 页面尺寸（以点为单位，1点=1/72英寸）
     double pdfPageWidthPoints, pdfPageHeightPoints;
     poppler_page_get_size(pdfPage, &pdfPageWidthPoints, &pdfPageHeightPoints);
@@ -713,17 +742,17 @@ void MainComponent::renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageCo
     double pdfAspectRatio = pdfPageWidthPoints / pdfPageHeightPoints;
     double componentAspectRatio = static_cast<double>(targetWidth) / targetHeight;
 
-    // 根据组件尺寸和 PDF 页面比例，计算渲染尺寸
+    // 根据目标尺寸和 PDF 页面比例，计算渲染尺寸
     int renderWidth, renderHeight;
     if (pdfAspectRatio > componentAspectRatio)
     {
-        // PDF 更宽，以组件宽度为基准
+        // PDF 更宽，以目标宽度为基准
         renderWidth = targetWidth;
         renderHeight = static_cast<int>(renderWidth / pdfAspectRatio);
     }
     else
     {
-        // PDF 更高，以组件高度为基准
+        // PDF 更高，以目标高度为基准
         renderHeight = targetHeight;
         renderWidth = static_cast<int>(renderHeight * pdfAspectRatio);
     }
@@ -783,15 +812,64 @@ void MainComponent::renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageCo
         }
     }
 
-    // 在组件中显示图像，不进行缩放
-    component.setImage(juceImage);
-
-    // 将图像存入缓存
-    renderedPageCache[pageIndex] = juceImage;
-
     // 清理 Cairo 资源
     cairo_destroy(cr);
     cairo_surface_destroy(surface);
+
+    return juceImage;
+}
+
+void MainComponent::togglePresentationWindow()
+{
+    if (presentationWindow == nullptr)
+    {
+        presentationWindow = std::make_unique<PresentationWindow>();
+        presentationWindow->onCloseButtonPressed = [this] { presentButton.setToggleState(false, juce::dontSendNotification); };
+
+        presentButton.setToggleState(true, juce::dontSendNotification);
+        updatePresentationImage();
+    }
+    else if (presentationWindow->isVisible())
+    {
+        presentationWindow->setVisible(false);
+        presentButton.setToggleState(false, juce::dontSendNotification);
+    }
+    else
+    {
+        presentationWindow->setVisible(true);
+        presentationWindow->toFront(true);
+        presentButton.setToggleState(true, juce::dontSendNotification);
+        updatePresentationImage();
+    }
+}
+
+void MainComponent::updatePresentationImage()
+{
+    if (presentationWindow == nullptr || !presentationWindow->isVisible() || pdfDoc == nullptr)
+        return;
+
+    PopplerPage* pdfPage = poppler_document_get_page(pdfDoc, currentPageIndex);
+    if (pdfPage == nullptr)
+        return;
+
+    // 按当前所在屏幕的分辨率渲染，保证放大后依然清晰
+    auto& displays = juce::Desktop::getInstance().getDisplays();
+    auto* display = displays.getDisplayForRect(presentationWindow->getScreenBounds());
+    if (display == nullptr)
+        display = displays.getPrimaryDisplay();
+    if (display == nullptr)
+    {
+        g_object_unref(pdfPage);
+        return;
+    }
+
+    // userArea 是逻辑像素，乘以该屏幕的 scale 才是物理像素分辨率，Retina 屏下才不会糊
+    juce::Image image = renderPdfPageToImage(pdfPage,
+                                              juce::roundToInt(display->userArea.getWidth() * display->scale),
+                                              juce::roundToInt(display->userArea.getHeight() * display->scale));
+    presentationWindow->setImage(image);
+
+    g_object_unref(pdfPage);
 }
 
 //==============================================================================
@@ -799,32 +877,22 @@ void MainComponent::renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageCo
 
 void MainComponent::paint(juce::Graphics& g)
 {
-    // 设置白色背景
-    g.fillAll(juce::Colours::white);
+    // 深色主题背景，跟按钮默认配色统一（LookAndFeel_V4 深色方案的 windowBackground）
+    g.fillAll (juce::Colour (0xff323e44));
 
     // 如果没有 PDF 文件，显示提示信息
     if (!pdfImageComponent.isVisible())
     {
-        g.setColour(juce::Colours::lightgrey);
-        g.fillRect(pdfImageComponent.getBounds());  // 灰色填充
-        g.setColour(juce::Colours::black);
-        g.drawText("Please drag PDF here", pdfImageComponent.getBounds(), juce::Justification::centred);
+        g.setColour (juce::Colour (0xff263238));  // 深色"占位框"
+        g.fillRect (pdfImageComponent.getBounds());
+        g.setColour (juce::Colours::white.withAlpha (0.5f));
+        g.drawText ("Please drag PDF here", pdfImageComponent.getBounds(), juce::Justification::centred);
     }
 
-    // 绘制边框
-    g.setColour(juce::Colours::pink);
-    g.drawRect(pdfImageComponent.getBounds(), 2);  // 大的 PDF 显示区域，粉色边框
-
-    g.setColour(juce::Colours::pink);
-    g.drawRect(nextPagePreview.getBounds(), 2);  // 小的下一页预览区域，粉色边框
-
-    // 绘制文件名显示区域的边框
-    g.setColour(juce::Colours::black);
-    g.drawRect(audioFileNameLabel.getBounds(), 2);  // 音频文件名的边框
-    g.drawRect(pdfFileNameLabel.getBounds(), 2);    // PDF 文件名的边框
-    
-    //
-    
+    // 用克制的细描边代替满屏的粉色调试框
+    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.drawRect (pdfImageComponent.getBounds(), 1);
+    g.drawRect (nextPagePreview.getBounds(), 1);
 }
 
 void MainComponent::resized()
@@ -858,11 +926,21 @@ void MainComponent::resized()
         pdfWidth = static_cast<int>(pdfHeight * a4AspectRatio);
     }
 
+    // 应用名称标签，放在左上角
+    appTitleLabel.setBounds(margin, 2, 200, margin * 3 - 4);
+
     // 设置主 PDF 框的位置（左侧）
     int pdfX = margin;
     int pdfY = margin * 3;
 
     pdfImageComponent.setBounds(pdfX, pdfY, pdfWidth, pdfHeight);
+
+    // 放大展示窗口开关按钮，固定在 PDF 显示框的右下角
+    int expandButtonSize = 24;
+    int expandButtonInset = 6;
+    presentButton.setBounds(pdfImageComponent.getRight() - expandButtonSize - expandButtonInset,
+                             pdfImageComponent.getBottom() - expandButtonSize - expandButtonInset,
+                             expandButtonSize, expandButtonSize);
 
     // 调整 PDF 文件名标签的大小
     int pdfLabelWidth = 100; // 调整为较小的宽度
@@ -946,5 +1024,4 @@ void MainComponent::resized()
     int buttonsY = audioFileNameLabel.getY();
     playButton.setBounds(audioFileNameLabel.getRight() + spacing, buttonsY, buttonWidth, buttonHeight);
     pauseButton.setBounds(playButton.getRight() + spacing, buttonsY, buttonWidth, buttonHeight);
-    
 }

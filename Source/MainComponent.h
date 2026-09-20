@@ -9,6 +9,9 @@
 #include "WaveformDisplay.h"
 #include "MarkerSlider.h"
 #include "Marker.h"
+#include "PresentationWindow.h"
+#include "ExpandButton.h"
+#include <tuple>
 
 
 //==============================================================================
@@ -86,6 +89,7 @@ private:
     WaveformDisplay waveformDisplay;               // 声明 waveformDisplay
 
     // GUI components
+    juce::Label appTitleLabel;
     juce::Slider progressSlider;
     juce::Label audioFileNameLabel;
     juce::Label pdfFileNameLabel;
@@ -99,6 +103,13 @@ private:
     // PDF handling
     void loadAndDisplayPDF(const juce::File& pdfFile);
     void renderPdfPageToComponent(PopplerPage* pdfPage, juce::ImageComponent& component, int pageIndex);
+    juce::Image renderPdfPageToImage(PopplerPage* pdfPage, int targetWidth, int targetHeight);
+
+    // Presentation window (independent enlarged view of the current page)
+    ExpandButton presentButton;
+    std::unique_ptr<PresentationWindow> presentationWindow;
+    void togglePresentationWindow();
+    void updatePresentationImage();
 
 
     // Poppler document
@@ -124,6 +135,7 @@ private:
     // markerSave button
     juce::TextButton saveMarkersButton;
     std::unique_ptr<juce::FileChooser> fileChooser; // 添加这一行
-    // 使用 std::map 或 std::unordered_map 作为缓存
-    std::unordered_map<int, juce::Image> renderedPageCache;
+    // 缓存 key 是 (页码, 渲染宽, 渲染高)：大图框和小预览框渲染同一页时尺寸不同，
+    // 必须分开缓存，否则同一页从小预览切到大图显示时会直接复用小图，导致糊
+    std::map<std::tuple<int, int, int>, juce::Image> renderedPageCache;
 };
