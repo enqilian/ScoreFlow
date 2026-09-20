@@ -1,35 +1,35 @@
-# Automated Page-Turn Audio Player
+# ScoreFlow
 
 A desktop audio player designed for performers and composers, with support for synchronized score viewing and marker-based page turning.
 
 ## Overview
 
-This project explores how audio playback can be integrated with score navigation to improve the performance workflow. It allows users to load audio and score files, place markers, and use playback position to assist page turns during practice or performance.
+ScoreFlow integrates audio playback with score navigation to improve the performance workflow. Load an audio file and a PDF score, place markers on the timeline, and let playback position drive automatic page turns during practice or performance.
 
 ## Features
 
 - Audio playback for rehearsal and performance use
-- Score display alongside audio playback
-- Marker-based navigation for important musical events
-- Page-turn assistance linked to playback position
-- User-oriented interface for performers and composers
+- PDF score display synchronized with audio playback
+- Marker-based navigation for important musical events, with save/load to a `.markers` file
+- Automatic page-turn assistance linked to playback position
+- Independent presentation window for showing the current page full-screen on a second display, separate from the main control window
+- Dark, distraction-free interface
 
 ## Tech Stack
 
 - C++
 - JUCE
+- Poppler + Cairo (PDF rendering)
 - Desktop application development
 
 ## Status
 
-This project is a prototype for exploring synchronized audio-score interaction. Some features are still under development and may not yet be fully automated.
+This project is an evolving prototype for exploring synchronized audio-score interaction during performance. Some features are still under development.
 
 ## Author
 
-Enqi Lian
+Enqi Lian (连恩其)
+
 ---
 
 © 2024 Enqi. All rights reserved.
-```
-
-You can now directly paste this into your `README.md` file, and it will be formatted correctly on GitHub.
